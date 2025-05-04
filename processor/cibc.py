@@ -45,9 +45,9 @@ class CIBCProcessor:
             expand_fn=self._expand_credit,
             duplicate_index=False
         )
+        self.cash_flow_df = None
         self.internal_transfer_df = None
         self.internal_payment_df = None
-        self.cash_flow_df = None
 
     def _parse_debit_description(self, description):
         tx_type_match = re.search(r'[A-Z][^a-z0-9]*[A-Z]', description)  # get transaction type
@@ -134,7 +134,7 @@ class CIBCProcessor:
         df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
         return df
 
-    def index_entries(self):
+    def _index_entries(self):
         combined_expanded_df = pd.concat([
             self.expanded_savings_df,
             self.expanded_chequing_df,
@@ -158,7 +158,7 @@ class CIBCProcessor:
             return "expense"
         return "zero-value"
 
-    def clean(self):
+    def _clean(self):
         merged_df = self.expanded_savings_df.merge(
             self.expanded_chequing_df,
             left_on="description",
@@ -168,7 +168,7 @@ class CIBCProcessor:
         self.internal_transfer_df = pd.concat([
             self.expanded_savings_df.loc[merged_df["index_copy_x"]],
             self.expanded_chequing_df.loc[merged_df["index_copy_y"]]
-        ]).drop(columns=["index_copy", "party"]).reset_index(drop=True)
+        ]).drop(columns=["index_copy", "party"]).sort_values(by=["uid"]).reset_index(drop=True)
         raw_debit_df = pd.concat([
             self.expanded_savings_df.drop(merged_df["index_copy_x"]),
             self.expanded_chequing_df.drop(merged_df["index_copy_y"])
@@ -181,17 +181,40 @@ class CIBCProcessor:
         self.internal_payment_df = pd.concat([
             internal_payment_from_debit_df,
             self.expanded_credit_df.loc[credit_payment_bool_series]
-        ]).drop(columns=["party"]).reset_index(drop=True)
+        ]).drop(columns=["party"]).sort_values(by=["uid"]).reset_index(drop=True)
         debit_df = raw_debit_df.drop(internal_payment_from_debit_df.index).reset_index(drop=True)
         self.cash_flow_df = pd.concat([
             debit_df,
             self.expanded_credit_df.loc[~credit_payment_bool_series]
-        ]).sort_values(by=["date"]).reset_index(drop=True)
+        ]).sort_values(by=["uid"]).reset_index(drop=True)
         self.cash_flow_df["balance"] = self.cash_flow_df["amount"].cumsum()
         self.cash_flow_df["sign"] = self.cash_flow_df["amount"].apply(self._get_sign)
 
+    def _get_complement(self, worksheet_dict):
+        df_dict = {
+            "cash_flow": self.cash_flow_df,
+            "internal_transfer": self.internal_transfer_df,
+            "internal_payment": self.internal_payment_df
+        }
+        result = {}
+        for key, df in df_dict.items():
+            result[key] = df.loc[~df["uid"].isin(worksheet_dict[key]["uid"])]
+        return result
+
+    def _update_dataframes(self, df_dict):
+        self.cash_flow_df = df_dict["cash_flow"]
+        self.internal_transfer_df = df_dict["internal_transfer"]
+        self.internal_payment_df = df_dict["internal_payment"]
+
+    def build_worksheet(self):
+        self._index_entries()
+        self._clean()
+
+    def filter_complement(self, worksheet_dict):
+        self._update_dataframes(self._get_complement(worksheet_dict))
+
     def output(self, file_path):
         with pd.ExcelWriter(file_path) as writer:
-            self.cash_flow_df.to_excel(writer, sheet_name="cash_flow", index=False)
-            self.internal_transfer_df.to_excel(writer, sheet_name="internal_transfer", index=False)
-            self.internal_payment_df.to_excel(writer, sheet_name="internal_payment", index=False)
+            self.cash_flow_df.sort_values(by=["uid"]).to_excel(writer, sheet_name="cash_flow", index=False)
+            self.internal_transfer_df.sort_values(by=["uid"]).to_excel(writer, sheet_name="internal_transfer", index=False)
+            self.internal_payment_df.sort_values(by=["uid"]).to_excel(writer, sheet_name="internal_payment", index=False)

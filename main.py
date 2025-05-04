@@ -5,16 +5,20 @@ import pandas as pd
 
 
 class Presenter:
-    EXCEL_WORKSHEET_EXT = ".xlsx"
+    WORKSHEET_EXTENSION = ".xlsx"
 
     def __init__(self, processor):
         self.processor = processor
 
-    def create(self, dir_path, file_name, complement):
-        file_path = os.path.join(dir_path, f"{file_name}{Presenter.EXCEL_WORKSHEET_EXT}")
-        self.processor.index_entries()
-        self.processor.clean()
-        self.processor.output(file_path)
+    def create(self, dir_path, file_name, worksheet_path=""):
+        self.processor.build_worksheet()
+        if worksheet_path:
+            self.processor.filter_complement(
+                pd.read_excel(worksheet_path, sheet_name=None)
+            )
+        self.processor.output(
+            os.path.join(dir_path, f"{file_name}{Presenter.WORKSHEET_EXTENSION}")
+        )
 
 
 def main():
@@ -34,20 +38,20 @@ def main():
     )
     parser.add_argument(
         "--complement",
-        action="store_true",
-        help="Output new entries only"
+        type=str,
+        metavar="worksheet_path",
+        help="Output entries that are not in the worksheet at worksheet_path"
     )
     parser.add_argument(
         "-u", "--update",
         type=str,
         nargs=2,
-        metavar=("file_path", "file_name"),
-        help="Update the worksheet from file_path and create a new copy named file_name (without file extension)"
+        metavar=("worksheet_path", "file_name"),
+        help="Update the worksheet from worksheet_path and create a new copy named file_name (without file extension)"
     )
     parser.add_argument(
         "--dirpath",
         type=str,
-        nargs=1,
         metavar="dir_path",
         help="Set a custom destination directory path"
     )
@@ -85,10 +89,16 @@ def main():
         )
     )
     if args.create:
+        if args.complement:
+            presenter.create(
+                dst_dir_path,
+                args.create,
+                args.complement
+            )
+            return
         presenter.create(
             dst_dir_path,
-            args.create,
-            args.complement
+            args.create
         )
     elif args.update:
         print(args.update)
