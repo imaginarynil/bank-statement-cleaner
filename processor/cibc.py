@@ -37,11 +37,19 @@ class CIBCProcessor:
             chequing_df,
             credit_df
     ):
-        self.expanded_savings_df = self._expand_account_df("savings", savings_df, expand_fn=self._expand_debit)
-        self.expanded_chequing_df = self._expand_account_df("chequing", chequing_df, expand_fn=self._expand_debit)
+        self.expanded_savings_df = self._expand_account_df(
+            "savings",
+            savings_df,
+            expand_fn=self._expand_debit
+        )
+        self.expanded_chequing_df = self._expand_account_df(
+            "chequing",
+            chequing_df,
+            expand_fn=self._expand_debit
+        )
         self.expanded_credit_df = self._expand_account_df(
             "credit",
-            self._preprocess_credit_df(credit_df),
+            credit_df,
             expand_fn=self._expand_credit,
             duplicate_index=False
         )
@@ -120,6 +128,11 @@ class CIBCProcessor:
 
     def _expand_account_df(self, account, account_df, expand_fn=None, duplicate_index=True):
         df = account_df.copy()
+        date = pd.to_datetime(df["date"])
+        df["date"] = date.dt.strftime("%Y-%m-%d")
+        df["year"] = date.dt.year
+        df["month"] = date.dt.month
+        df["day"] = date.dt.day
         df["account"] = account
         df["amount"] = df[["debit", "credit"]].apply(
             lambda x: x["credit"] if pd.isnull(x["debit"]) else -1 * x["debit"], axis=1)
@@ -128,10 +141,6 @@ class CIBCProcessor:
             expand_fn(df)
         if duplicate_index:
             df["index_copy"] = df.index
-        return df
-
-    def _preprocess_credit_df(self, df):
-        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
         return df
 
     def _index_entries(self):
@@ -215,6 +224,12 @@ class CIBCProcessor:
 
     def output(self, file_path):
         with pd.ExcelWriter(file_path) as writer:
-            self.cash_flow_df.sort_values(by=["uid"]).to_excel(writer, sheet_name="cash_flow", index=False)
-            self.internal_transfer_df.sort_values(by=["uid"]).to_excel(writer, sheet_name="internal_transfer", index=False)
-            self.internal_payment_df.sort_values(by=["uid"]).to_excel(writer, sheet_name="internal_payment", index=False)
+            self.cash_flow_df.sort_values(
+                by=["uid"]
+            ).to_excel(writer, sheet_name="cash_flow", index=False)
+            self.internal_transfer_df.sort_values(
+                by=["uid"]
+            ).to_excel(writer, sheet_name="internal_transfer", index=False)
+            self.internal_payment_df.sort_values(
+                by=["uid"]
+            ).to_excel(writer, sheet_name="internal_payment", index=False)
