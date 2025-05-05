@@ -196,8 +196,12 @@ class CIBCProcessor:
             debit_df,
             self.expanded_credit_df.loc[~credit_payment_bool_series]
         ]).sort_values(by=["uid"]).reset_index(drop=True)
-        self.cash_flow_df["balance"] = self.cash_flow_df["amount"].cumsum()
         self.cash_flow_df["sign"] = self.cash_flow_df["amount"].apply(self._get_sign)
+
+    def _update_dataframes(self, df_dict):
+        self.cash_flow_df = df_dict["cash_flow"]
+        self.internal_transfer_df = df_dict["internal_transfer"]
+        self.internal_payment_df = df_dict["internal_payment"]
 
     def _get_complement(self, worksheet_dict):
         df_dict = {
@@ -210,10 +214,16 @@ class CIBCProcessor:
             result[key] = df.loc[~df["uid"].isin(worksheet_dict[key]["uid"])]
         return result
 
-    def _update_dataframes(self, df_dict):
-        self.cash_flow_df = df_dict["cash_flow"]
-        self.internal_transfer_df = df_dict["internal_transfer"]
-        self.internal_payment_df = df_dict["internal_payment"]
+    def _merge(self, worksheet_dict):
+        complement = self._get_complement(worksheet_dict)
+        result = {}
+        for i in ["cash_flow", "internal_transfer", "internal_payment"]:
+            result[i] = pd.concat([
+                worksheet_dict[i],
+                complement[i]
+            ]).sort_values(by=["uid"])
+            print(f"added {len(complement[i].index)} new rows in {i}")
+        return result
 
     def build_worksheet(self):
         self._index_entries()
@@ -221,6 +231,9 @@ class CIBCProcessor:
 
     def filter_complement(self, worksheet_dict):
         self._update_dataframes(self._get_complement(worksheet_dict))
+
+    def merge_rows(self, worksheet_dict):
+        self._update_dataframes(self._merge(worksheet_dict))
 
     def output(self, file_path):
         with pd.ExcelWriter(file_path) as writer:

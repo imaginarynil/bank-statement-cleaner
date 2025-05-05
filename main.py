@@ -20,6 +20,15 @@ class Presenter:
             os.path.join(dir_path, f"{file_name}{Presenter.WORKSHEET_EXTENSION}")
         )
 
+    def update(self, worksheet_path, dir_path, file_name):
+        self.processor.build_worksheet()
+        self.processor.merge_rows(
+            pd.read_excel(worksheet_path, sheet_name=None)
+        )
+        self.processor.output(
+            os.path.join(dir_path, f"{file_name}{Presenter.WORKSHEET_EXTENSION}")
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -101,7 +110,13 @@ def main():
             args.create
         )
     elif args.update:
-        print(args.update)
+        worksheet_path = args.update[0]
+        file_name = args.update[1]
+        presenter.update(
+            worksheet_path,
+            dst_dir_path,
+            file_name
+        )
 
 
 main()
