@@ -71,7 +71,10 @@ def main():
         return
     dst_dir_path = os.getcwd()
     if args.dirpath:
-        print(args.dirpath)
+        if not os.path.isdir(args.dirpath):
+            print(f"{args.dirpath} not found")
+            return
+        dst_dir_path = args.dirpath
     csv_paths = {
         "savings": os.path.join(dataset_dir_path, "savings.csv"),
         "chequing": os.path.join(dataset_dir_path, "chequing.csv"),
