@@ -1,6 +1,7 @@
 import re
 import pandas as pd
 import numpy as np
+import string
 
 
 class CIBCTransactionDescription:
@@ -55,6 +56,7 @@ class CIBCProcessor:
         self.cash_flow_df = None
         self.internal_transfer_df = None
         self.internal_payment_df = None
+        self.uid_dict = {}
 
     def _parse_debit_description(self, description):
         tx_type_match = re.search(r'[A-Z][^a-z0-9]*[A-Z]', description)  # get transaction type
@@ -142,22 +144,32 @@ class CIBCProcessor:
             df["index_copy"] = df.index
         return df
 
+    def _create_uid(self, date, description, account, amount):
+        separator = "_"
+        table = str.maketrans("", "", string.punctuation)
+        description = description.translate(table)
+        uid = separator.join([date, description, account, str(amount)])
+        if uid not in self.uid_dict:
+            self.uid_dict[uid] = 1
+        else:
+            self.uid_dict[uid] += 1
+        return separator.join([uid, str(self.uid_dict[uid])]).lower()
+
+    def _get_uid_series(self, df):
+        return df.apply(lambda x: self._create_uid(
+            x["date"],
+            x["description"],
+            x["account"],
+            x["amount"]
+        ), axis=1)
+
     def _index_entries(self):
-        combined_expanded_df = pd.concat([
+        for df in [
             self.expanded_savings_df,
             self.expanded_chequing_df,
             self.expanded_credit_df
-        ]).sort_values(by=["date"])
-        combined_expanded_df["uid"] = combined_expanded_df.reset_index(drop=True).index + 1
-        self.expanded_savings_df = self.expanded_savings_df.sort_index()
-        self.expanded_savings_df["uid"] = \
-            combined_expanded_df.loc[combined_expanded_df["account"] == "savings"].sort_index()["uid"]
-        self.expanded_chequing_df = self.expanded_chequing_df.sort_index()
-        self.expanded_chequing_df["uid"] = \
-            combined_expanded_df.loc[combined_expanded_df["account"] == "chequing"].sort_index()["uid"]
-        self.expanded_credit_df = self.expanded_credit_df.sort_index()
-        self.expanded_credit_df["uid"] = \
-            combined_expanded_df.loc[combined_expanded_df["account"] == "credit"].sort_index()["uid"]
+        ]:
+            df["uid"] = self._get_uid_series(df)
 
     def _get_sign(self, amount):
         if amount > 0:
@@ -237,11 +249,11 @@ class CIBCProcessor:
     def output(self, file_path):
         with pd.ExcelWriter(file_path) as writer:
             self.cash_flow_df.sort_values(
-                by=["uid"]
+                by=["date"]
             ).to_excel(writer, sheet_name="cash_flow", index=False)
             self.internal_transfer_df.sort_values(
-                by=["uid"]
+                by=["date"]
             ).to_excel(writer, sheet_name="internal_transfer", index=False)
             self.internal_payment_df.sort_values(
-                by=["uid"]
+                by=["date"]
             ).to_excel(writer, sheet_name="internal_payment", index=False)

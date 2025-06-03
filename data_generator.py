@@ -131,6 +131,16 @@ def main():
             value=2000
         )
     )
+    savings_entries.append(
+        ConstantEntry(
+            date=start_date,
+            name="deposit",
+            method="Automated Banking Machine",
+            type="ATM DEPOSIT",
+            party="TORONTO",
+            value=2000
+        )
+    )
     chequing_entries.append(
         ConstantEntry(
             date=start_date,
